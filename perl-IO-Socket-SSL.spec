@@ -5,12 +5,16 @@
 
 Name:		perl-IO-Socket-SSL
 Version:	1.31
-Release:	2%{?dist}
+Release:	3%{?dist}
 Summary:	Perl library for transparent SSL
 Group:		Development/Libraries
 License:	GPL+ or Artistic
 URL:		http://search.cpan.org/dist/IO-Socket-SSL/
 Source0:	http://search.cpan.org/CPAN/authors/id/S/SU/SULLR/IO-Socket-SSL-%{version}.tar.gz
+# Add support for ECDH key exchange, in upstream 1.955, bug #1078084
+Patch0:		IO-Socket-SSL-1.31-Added-support-for-ECDH-key-exchange-with-key-SSL_ecd.patch
+# Fix t/dhe.t test, in upstream 1.58, CPAN RT#75165, bug #1078301
+Patch1:		IO-Socket-SSL-1.31-Fix-t-dhe.t-for-openssl-1.0.1beta.patch
 BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildArch:	noarch
 BuildRequires:	perl(ExtUtils::MakeMaker), perl(Test::Simple)
@@ -30,6 +34,8 @@ mod_perl.
 
 %prep
 %setup -q -n IO-Socket-SSL-%{version}
+%patch0 -p1
+%patch1 -p1
 for f in README SSL.pm; do
 	/usr/bin/iconv -f iso-8859-1 -t utf-8 -o $f{.utf8,}; %{__mv} $f{.utf8,}
 done
@@ -61,6 +67,10 @@ done
 %{_mandir}/man3/IO::Socket::SSL.3pm*
 
 %changelog
+* Fri Nov 13 2015 Petr Pisar <ppisar@redhat.com> - 1.31-3
+- Add support for ECDH key exchange (bug #1078084)
+- Fix t/dhe.t test (bug #1078301)
+
 * Mon Dec  7 2009 Stepan Kasal <skasal@redhat.com> - 1.31-2
 - rebuild against perl 5.10.1
 
