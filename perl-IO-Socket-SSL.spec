@@ -5,7 +5,7 @@
 
 Name:		perl-IO-Socket-SSL
 Version:	1.31
-Release:	3%{?dist}
+Release:	3%{?dist}.2
 Summary:	Perl library for transparent SSL
 Group:		Development/Libraries
 License:	GPL+ or Artistic
@@ -15,13 +15,26 @@ Source0:	http://search.cpan.org/CPAN/authors/id/S/SU/SULLR/IO-Socket-SSL-%{versi
 Patch0:		IO-Socket-SSL-1.31-Added-support-for-ECDH-key-exchange-with-key-SSL_ecd.patch
 # Fix t/dhe.t test, in upstream 1.58, CPAN RT#75165, bug #1078301
 Patch1:		IO-Socket-SSL-1.31-Fix-t-dhe.t-for-openssl-1.0.1beta.patch
+# Add support for TLSv1.1, TLSv1.2, bz#1375525
+Patch2:         perl-IO-Socket-SSL-TLSv1.x.patch
 BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildArch:	noarch
 BuildRequires:	perl(ExtUtils::MakeMaker), perl(Test::Simple)
-BuildRequires:	perl(IO::Socket::INET6), perl(Net::LibIDN), perl(Net::SSLeay) >= 1.21
+BuildRequires:	perl(IO::Socket::INET6), perl(Net::LibIDN)
+BuildRequires:	perl-Net-SSLeay >= 1.35-10.el6_8.1
 BuildRequires:	procps
 Requires:	perl(:MODULE_COMPAT_%(eval "`%{__perl} -V:version`"; echo $version))
 Requires:	perl(Net::LibIDN)
+Requires:	perl-Net-SSLeay >= 1.35-10.el6_8.1
+
+# RPM 4.8 style
+%{?filter_setup:
+%filter_from_requires /^perl(Net::SSLeay)/d
+}
+# RPM 4.9 style
+%global __requires_exclude %{?__requires_exclude:__requires_exclude|}^perl\\(Net::SSLeay\\)
+%{?perl_default_filter}
+
 
 %description
 This module is a true drop-in replacement for IO::Socket::INET that
@@ -36,6 +49,7 @@ mod_perl.
 %setup -q -n IO-Socket-SSL-%{version}
 %patch0 -p1
 %patch1 -p1
+%patch2 -p1
 for f in README SSL.pm; do
 	/usr/bin/iconv -f iso-8859-1 -t utf-8 -o $f{.utf8,}; %{__mv} $f{.utf8,}
 done
@@ -67,6 +81,12 @@ done
 %{_mandir}/man3/IO::Socket::SSL.3pm*
 
 %changelog
+* Mon Sep 26 2016 Jitka Plesnikova <jplesnik@redhat.com> - 1.31-3.2
+- Update dependencies to correctly support for TLSv1.x (bug #1375525)
+
+* Mon Sep 12 2016 Jitka Plesnikova <jplesnik@redhat.com> - 1.31-3.1
+- Add support for TLSv1.1, TLSv1.2, (bug #1375525)
+
 * Fri Nov 13 2015 Petr Pisar <ppisar@redhat.com> - 1.31-3
 - Add support for ECDH key exchange (bug #1078084)
 - Fix t/dhe.t test (bug #1078301)
@@ -176,7 +196,7 @@ done
 - 0.97.
 - Convert docs to UTF-8, drop some unuseful ones.
 
-* Fri Apr  7 2005 Michael Schwendt <mschwendt[AT]users.sf.net> - 0.96-4
+* Fri Apr  8 2005 Michael Schwendt <mschwendt[AT]users.sf.net> - 0.96-4
 - Rebuilt
 
 * Tue Oct 12 2004 Ville Skyttä <ville.skytta at iki.fi> - 0:0.96-3
