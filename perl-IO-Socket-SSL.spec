@@ -1,6 +1,6 @@
 Name:           perl-IO-Socket-SSL
 Version:        1.94
-Release:        6%{?dist}
+Release:        7%{?dist}
 Summary:        Perl library for transparent SSL
 Group:          Development/Libraries
 License:        GPL+ or Artistic
@@ -20,6 +20,8 @@ Patch4:         IO-Socket-SSL-1.94-support-for-handshake-protocol-TLSv11-TLSv12.
 # The new syntax for the protocols is TLSv1_1 instead of TLSv11, bug #1335035,
 # in upstream 1.966
 Patch5:         IO-Socket-SSL-1.94-The-new-syntax-for-the-protocols-is-TLSv1_1-instead-.patch
+# Default to system wide CA certificate store, bug #1402588, in upstream 1.968
+Patch6:         IO-Socket-SSL-1.94-Default-SSL_ca_file-to-system-wide-store.patch
 BuildArch:      noarch
 BuildRequires:  openssl >= 0.9.8
 BuildRequires:  perl
@@ -33,6 +35,7 @@ BuildRequires:  perl(IO::Socket)
 BuildRequires:  perl(IO::Socket::INET)
 #BuildRequires: perl(IO::Socket::INET6) ????
 BuildRequires:  perl(IO::Socket::IP) >= 0.20
+# Mozilla::CA not used at tests
 BuildRequires:  perl(Net::LibIDN)
 BuildRequires:  perl(Net::SSLeay) >= 1.46
 BuildRequires:  perl(Scalar::Util)
@@ -46,6 +49,7 @@ BuildRequires:  procps
 Requires:       perl(:MODULE_COMPAT_%(eval "`perl -V:version`"; echo $version))
 Requires:       perl(IO::Socket::IP) >= 0.20
 Requires:       perl(Socket) >= 1.95
+Requires:       perl(Mozilla::CA)
 Requires:       perl(Net::LibIDN)
 Requires:       perl-Net-SSLeay >= 1.55-5
 Requires:       openssl >= 0.9.8
@@ -67,6 +71,7 @@ mod_perl.
 %patch3 -p1
 %patch4 -p1
 %patch5 -p1
+%patch6 -p1
 
 %build
 perl Makefile.PL INSTALLDIRS=vendor
@@ -88,6 +93,9 @@ make test
 %{_mandir}/man3/IO::Socket::SSL::Utils.3*
 
 %changelog
+* Wed Aug 30 2017 Petr Pisar <ppisar@redhat.com> - 1.94-7
+- Default to system wide CA certificate store (bug #1402588)
+
 * Thu Oct 06 2016 Petr Pisar <ppisar@redhat.com> - 1.94-6
 - Add support for TLSv1.1, TLSv1.2 (bug #1335035)
 

@@ -1,0 +1,149 @@
+From acf455911cd0b97e247bcd06e365a3fea0ba208c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Petr=20P=C3=ADsa=C5=99?= <ppisar@redhat.com>
+Date: Thu, 8 Dec 2016 13:49:11 +0100
+Subject: [PATCH] Default SSL_ca_file to system-wide store
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This patch provides a default value for a file with CA certificates.
+Similar idea was implemented in upstream version 1.968.
+
+This patch also decouples default values for CA and client
+certificates. This allows to specify SSL_cert_file and SSL_key_file
+while not specifying SSL_ca_path and SSL_ca_file to still use
+default values for them.
+
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ lib/IO/Socket/SSL.pm | 65 +++++++++++++++++++++++++++++++++++-----------------
+ 1 file changed, 44 insertions(+), 21 deletions(-)
+
+diff --git a/lib/IO/Socket/SSL.pm b/lib/IO/Socket/SSL.pm
+index 4720606..2ea454b 100644
+--- a/lib/IO/Socket/SSL.pm
++++ b/lib/IO/Socket/SSL.pm
+@@ -326,7 +326,7 @@ sub configure_SSL {
+ 	    "*******************************************************************\n".
+ 	    " Using the default of SSL_verify_mode of SSL_VERIFY_NONE for client\n".
+ 	    " is deprecated! Please set SSL_verify_mode to SSL_VERIFY_PEER\n".
+-	    " together with SSL_ca_file|SSL_ca_path for verification.\n".
++	    " possibly with SSL_ca_file|SSL_ca_path for verification.\n".
+ 	    " If you really don't want to verify the certificate and keep the\n".
+ 	    " connection open to Man-In-The-Middle attacks please set\n".
+ 	    " SSL_verify_mode explicitly to SSL_VERIFY_NONE in your application.\n".
+@@ -339,24 +339,54 @@ sub configure_SSL {
+     %$arg_hash = ( %default_args, %$arg_hash );
+ 
+     # use default path to certs and ca unless another one was given
+-    # don't mix default path with user specified path, either we use all
+-    # or no defaults
++    # don't mix default paths with user specified paths for CA or client
++    # certificates, either we use all from the grup or no defaults
+     {
+-	my $use_default = 1;
+-	for (qw( SSL_cert SSL_cert_file SSL_key SSL_key_file SSL_ca_file SSL_ca_path )) {
++	my $use_default_ca = 1;
++	my $dont_use_system_ca_file = (exists $arg_hash->{SSL_ca_file} and
++		not defined($arg_hash->{SSL_ca_file}));
++	for (qw( SSL_ca_file SSL_ca_path )) {
+ 	    next if ! defined $arg_hash->{$_};
+ 	    # some apps set keys '' to signal that it is not set, replace with undef
+ 	    if ( $arg_hash->{$_} eq '' ) {
+ 		$arg_hash->{$_} = undef;
+ 		next;
+ 	    }
+-	    $use_default = 0;
++	    $use_default_ca = 0;
+ 	}
+-	if ( $use_default ) {
++	my $use_default_client = 1;
++	for (qw( SSL_cert SSL_cert_file SSL_key SSL_key_file )) {
++	    next if ! defined $arg_hash->{$_};
++	    # some apps set keys '' to signal that it is not set, replace with undef
++	    if ( $arg_hash->{$_} eq '' ) {
++		$arg_hash->{$_} = undef;
++		next;
++	    }
++	    $use_default_client = 0;
++	}
++	if ( $use_default_ca ) {
+ 	    my %ca = 
+ 		-f 'certs/my-ca.pem' ? ( SSL_ca_file => 'certs/my-ca.pem' ) :
+ 		-d 'ca/' ? ( SSL_ca_path => 'ca/' ) :
+ 		();
++	    if (! %ca and !$dont_use_system_ca_file) {
++		require Mozilla::CA;
++		%ca = ( SSL_ca_file => Mozilla::CA::SSL_ca_file() );
++	    }
++	    %$arg_hash = ( %$arg_hash, %ca );
++	} else {
++	    if ( defined( my $f = $arg_hash->{SSL_ca_file} )) {
++		die "SSL_ca_file $f does not exist" if ! -f $f;
++		die "SSL_ca_file $f is not accessable" if ! -r _;
++	    }
++	    if ( defined( my $d = $arg_hash->{SSL_ca_path} )) {
++		die "only SSL_ca_path or SSL_ca_file should be given"
++		    if defined $arg_hash->{SSL_ca_file};
++		die "SSL_ca_path $d does not exist" if ! -d $d;
++		die "SSL_ca_path $d is not accessable" if ! -r _;
++	    }
++	}
++	if ( $use_default_client ) {
+ 	    my %certs = $is_server ? (
+ 		SSL_key_file => 'certs/server-key.pem',
+ 		SSL_cert_file => 'certs/server-cert.pem',
+@@ -364,7 +394,7 @@ sub configure_SSL {
+ 		SSL_key_file => 'certs/client-key.pem',
+ 		SSL_cert_file => 'certs/client-cert.pem',
+ 	    );
+-	    %$arg_hash = ( %$arg_hash, %ca, %certs );
++	    %$arg_hash = ( %$arg_hash, %certs );
+ 	} else {
+ 	    for(qw(SSL_cert_file SSL_key_file)) {
+ 		defined( my $file = $arg_hash->{$_} ) or next;
+@@ -373,16 +403,6 @@ sub configure_SSL {
+ 		    die "$_ $f is not accessable" if ! -r _;
+ 		}
+ 	    }
+-	    if ( defined( my $f = $arg_hash->{SSL_ca_file} )) {
+-		die "SSL_ca_file $f does not exist" if ! -f $f;
+-		die "SSL_ca_file $f is not accessable" if ! -r _;
+-	    }
+-	    if ( defined( my $d = $arg_hash->{SSL_ca_path} )) {
+-		die "only SSL_ca_path or SSL_ca_file should be given" 
+-		    if defined $arg_hash->{SSL_ca_file};
+-		die "SSL_ca_path $d does not exist" if ! -d $d;
+-		die "SSL_ca_path $d is not accessable" if ! -r _;
+-	    }
+ 	}
+     }
+ 
+@@ -1937,8 +1957,11 @@ IO::Socket::SSL -- SSL sockets with IO::Socket interface
+ 
+ 	# certificate verification
+ 	SSL_verify_mode => SSL_VERIFY_PEER,
++
++	# location of CA store
++	# need only be given if default store should not be used
+ 	SSL_ca_path => '/etc/ssl/certs', # typical CA path on Linux
+-	# on OpenBSD instead: SSL_ca_file => '/etc/ssl/cert.pem'
++	SSL_ca_file => '/etc/ssl/cert.pem', # typical CA file on BSD
+ 
+ 	# easy hostname verification 
+ 	SSL_verifycn_name => 'foo.bar', # defaults to PeerHost
+@@ -2210,9 +2233,9 @@ password required to decrypt your private key.
+ =item SSL_ca_file
+ 
+ If you want to verify that the peer certificate has been signed by a reputable
+-certificate authority, then you should use this option to locate the file
++certificate authority, then you can use this option to locate the file
+ containing the certificateZ<>(s) of the reputable certificate authorities if it is
+-not already in the file F<certs/my-ca.pem>.
++not already in the file F<certs/my-ca.pem> or in a system-wide certificate authority certificates store.
+ If you definitely want no SSL_ca_file used you should set it to undef.
+ 
+ =item SSL_ca_path
+-- 
+2.7.4
+
