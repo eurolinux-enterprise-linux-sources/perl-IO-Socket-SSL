@@ -1,0 +1,39 @@
+Fix error reporting in Utils
+
+Back-ported from:
+
+From 6e46f6c5dbe1ca1145f68b9b77405590f71efcbc Mon Sep 17 00:00:00 2001
+From: Steffen Ullrich <Steffen_Ullrich@genua.de>
+Date: Mon, 22 Jul 2013 08:33:35 +0200
+Subject: [PATCH] 1.953 - RT#87052 fix in Utils.pm
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+
+diff --git a/lib/IO/Socket/SSL/Utils.pm b/lib/IO/Socket/SSL/Utils.pm
+index 6a71584..0542593 100644
+--- a/lib/IO/Socket/SSL/Utils.pm
++++ b/lib/IO/Socket/SSL/Utils.pm
+@@ -48,7 +48,7 @@ sub PEM_string2cert {
+ sub PEM_cert2string {
+     my $cert = shift;
+     return Net::SSLeay::PEM_get_string_X509($cert)
+-	or croak("cannot get string from cert");
++	|| croak("cannot get string from cert");
+ }
+ 
+ sub PEM_file2key {
+@@ -84,7 +84,7 @@ sub PEM_string2key {
+ sub PEM_key2string {
+     my $key = shift;
+     return Net::SSLeay::PEM_get_string_PrivateKey($key)
+-	or croak("cannot get string from key");
++	|| croak("cannot get string from key");
+ }
+ 
+ sub CERT_free {
+-- 
+1.8.1.4
+
