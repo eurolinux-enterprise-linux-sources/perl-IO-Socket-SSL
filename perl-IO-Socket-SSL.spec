@@ -1,6 +1,6 @@
 Name:           perl-IO-Socket-SSL
 Version:        1.94
-Release:        3%{?dist}
+Release:        5%{?dist}
 Summary:        Perl library for transparent SSL
 Group:          Development/Libraries
 License:        GPL+ or Artistic
@@ -8,6 +8,12 @@ URL:            http://search.cpan.org/dist/IO-Socket-SSL/
 Source0:        http://search.cpan.org/CPAN/authors/id/S/SU/SULLR/IO-Socket-SSL-%{version}.tar.gz
 # Correct error reporting, fixed in 1.953, CPAN RT#87052
 Patch0:         IO-Socket-SSL-1.94-1.953-RT-87052-fix-in-Utils.pm.patch
+# Respect OpenSSL default ciphers and protocol versions BZ#1127322
+Patch1:         IO-Socket-SSL-1.94-Respect-OpenSSL-default-ciphers-and-protocol-versions.patch
+# Fix typo in Utils.pm BZ#1097710
+Patch2:         IO-Socket-SSL-1.94-Fix-typo-key-free.patch
+# Add support for ECDH key exchange, in upstream 1.955, bug #1316377
+Patch3:         IO-Socket-SSL-1.94-Added-support-for-ECDH-key-exchange-with-key-SSL_ecd.patch
 BuildArch:      noarch
 BuildRequires:  openssl >= 0.9.8
 BuildRequires:  perl
@@ -49,6 +55,9 @@ mod_perl.
 %prep
 %setup -q -n IO-Socket-SSL-%{version}
 %patch0 -p1
+%patch1 -p1
+%patch2 -p1
+%patch3 -p1
 
 %build
 perl Makefile.PL INSTALLDIRS=vendor
@@ -70,6 +79,13 @@ make test
 %{_mandir}/man3/IO::Socket::SSL::Utils.3*
 
 %changelog
+* Thu Mar 10 2016 Jitka Plesnikova <jplesnik@redhat.com> - 1.94-5
+- Add support for ECDH key exchange (bug #1316377)
+
+* Fri Mar 04 2016 Jitka Plesnikova <jplesnik@redhat.com> - 1.94-4
+- Respect OpenSSL default ciphers and protocol versions (bug #1127322)
+- Fix typo in Utils.pm (bug #1097710)
+
 * Fri Dec 27 2013 Daniel Mach <dmach@redhat.com> - 1.94-3
 - Mass rebuild 2013-12-27
 

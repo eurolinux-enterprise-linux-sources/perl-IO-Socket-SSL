@@ -1,0 +1,88 @@
+From ffa8a34d793707a8a05652908b69fea7faeede7c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Petr=20P=C3=ADsa=C5=99?= <ppisar@redhat.com>
+Date: Thu, 7 Aug 2014 10:36:40 +0200
+Subject: [PATCH] Respect OpenSSL default ciphers and protocol versions
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+If application did not specified cipher or protocol version,
+IO::Socket::SSL set them to 'ALL:!LOW' and 'SSLv23:!SSLv2'. This
+undermined global cryptogphic setting.
+
+This patch disables these defaults hard-coded into IO::Socket::SSL and
+leves the decision on OpenSSL.
+
+http://rt.cpan.org/Public/Bug/Display.html?id=97816
+https://bugzilla.redhat.com/show_bug.cgi?id=1127322
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ lib/IO/Socket/SSL.pm | 13 +++++++------
+ t/dhe.t              |  1 +
+ 2 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/lib/IO/Socket/SSL.pm b/lib/IO/Socket/SSL.pm
+index 3e02e8f..eb4bd05 100644
+--- a/lib/IO/Socket/SSL.pm
++++ b/lib/IO/Socket/SSL.pm
+@@ -34,13 +34,13 @@ use constant SSL_RECEIVED_SHUTDOWN => 2;
+ # global defaults
+ my %DEFAULT_SSL_ARGS = (
+     SSL_check_crl => 0,
+-    SSL_version => 'SSLv23:!SSLv2',
++    SSL_version => '',
+     SSL_verify_callback => undef,
+     SSL_verifycn_scheme => undef,  # don't verify cn
+     SSL_verifycn_name => undef,    # use from PeerAddr/PeerHost
+     SSL_npn_protocols => undef,    # meaning depends whether on server or client side
+     SSL_honor_cipher_order => 0,   # client order gets preference
+-    SSL_cipher_list => 'ALL:!LOW',
++    SSL_cipher_list => undef,
+ 
+     # default for SSL_verify_mode should be SSL_VERIFY_PEER for client
+     # for now we keep the default of SSL_VERIFY_NONE but complain, if 
+@@ -1579,7 +1579,7 @@ sub new {
+ 	return $ctx_object if ($ctx_object = ${*$ctx_object}{'_SSL_ctx'});
+     }
+ 
+-    my $ver;
++    my $ver='';
+     my $disable_ver = 0;
+     for (split(/\s*:\s*/,$arg_hash->{SSL_version})) {
+ 	m{^(!?)(?:(SSL(?:v2|v3|v23|v2/3))|(TLSv1[12]?))$}i 
+@@ -2049,7 +2049,8 @@ to the specified version. All values are case-insensitive.
+ 
+ You can limit to set of supported protocols by adding !version separated by ':'.
+ 
+-The default SSL_version is 'SSLv23:!SSLv2' which means, that SSLv2, SSLv3 and TLSv1 
++The default SSL_version is defined by underlying cryptographic library.
++E.g. 'SSLv23:!SSLv2' means, that SSLv2, SSLv3 and TLSv1
+ are supported for initial protocol handshakes, but SSLv2 will not be accepted, leaving 
+ only SSLv3 and TLSv1. You can also use !TLSv11 and !TLSv12 to disable TLS versions
+ 1.1 and 1.2 while allowing TLS version 1.0.
+@@ -2066,8 +2067,8 @@ given value, e.g. something like 'ALL:!LOW:!EXP:!ADH'. Look into the OpenSSL
+ documentation (L<http://www.openssl.org/docs/apps/ciphers.html#CIPHER_STRINGS>)
+ for more details.
+ 
+-If this option is not set 'ALL:!LOW' will be used.
+-To use OpenSSL builtin default (whatever this is) set it to ''.
++If this option is not set or is set to '', OpenSSL builtin default (whatever
++this is) will be used.
+ 
+ =item SSL_honor_cipher_order
+ 
+diff --git a/t/dhe.t b/t/dhe.t
+index a2bf565..4010a26 100644
+--- a/t/dhe.t
++++ b/t/dhe.t
+@@ -55,6 +55,7 @@ if ( !defined $pid ) {
+     close($server);
+     my $to_server = IO::Socket::SSL->new( 
+ 	PeerAddr => $addr, 
++	SSL_cipher_list => 'ALL:RSA:!aRSA',
+ 	SSL_verify_mode => 0 ) || do {
+     	notok( "connect failed: $SSL_ERROR" );
+ 	exit
+-- 
+1.9.3
+
