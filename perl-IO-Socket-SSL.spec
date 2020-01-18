@@ -1,6 +1,6 @@
 Name:           perl-IO-Socket-SSL
 Version:        1.94
-Release:        2.1%{?dist}
+Release:        3%{?dist}
 Summary:        Perl library for transparent SSL
 Group:          Development/Libraries
 License:        GPL+ or Artistic
@@ -70,6 +70,9 @@ make test
 %{_mandir}/man3/IO::Socket::SSL::Utils.3*
 
 %changelog
+* Fri Dec 27 2013 Daniel Mach <dmach@redhat.com> - 1.94-3
+- Mass rebuild 2013-12-27
+
 * Wed Aug 07 2013 Petr Šabata <contyk@redhat.com> - 1.94-2.1
 - Extend the dependency list and remove not needed conditionals
 - Modernize the spec
