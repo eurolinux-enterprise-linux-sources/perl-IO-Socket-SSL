@@ -1,0 +1,148 @@
+From 70d5c2746afee9c2b6112246ab1640aa0ebb34c5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Petr=20P=C3=ADsa=C5=99?= <ppisar@redhat.com>
+Date: Thu, 6 Oct 2016 14:51:26 +0200
+Subject: [PATCH 2/2] The new syntax for the protocols is TLSv1_1 instead of
+ TLSv11
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This is a part of these commits ported to 1.94:
+
+commit 5c2151176da6a37e7dd16fd2ffc39809f58f6035
+Author: Steffen Ullrich <Steffen_Ullrich@genua.de>
+Date:   Wed Jan 15 12:33:49 2014 +0100
+
+    1.964: get_sslversion* function, disabling TLS1_1 fixed
+
+    - Disabling TLSv1_1 did not work, because the constant was wrong. Now it gets
+      the constants from calling Net::SSLeay::SSL_OP_NO_TLSv1_1 etc
+    - The new syntax for the protocols is TLSv1_1 instead of TLSv11. This matches
+      the syntax from OpenSSL. The old syntax continues to work in SSL_version.
+    - New functions get_sslversion and get_sslversion_int which get the SSL version
+      of the establish session as string or int.
+    - disable t/io-socket-inet6.t if Acme::Override::INET is installed
+
+commit bd49a91f755e5027ba5aa1656f32f86486f5c0fd
+Author: Steffen Ullrich <Steffen_Ullrich@genua.de>
+Date:   Tue Jan 21 17:53:15 2014 +0100
+
+    1.966
+    - fixed bug introduced in 1.964 - disabling TLSv1_2 worked no
+      longer with
+      specifying !TLSv12, only !TLSv1_2 worked
+    - fixed leak of session objects in SessionCache, if another
+      session
+      replaced an existing session (introduced in 1.965)
+
+Signed-off-by: Petr Písař <ppisar@redhat.com>
+---
+ lib/IO/Socket/SSL.pm | 62 ++++++++++++++++++++++++++++------------------------
+ 1 file changed, 34 insertions(+), 28 deletions(-)
+
+diff --git a/lib/IO/Socket/SSL.pm b/lib/IO/Socket/SSL.pm
+index a30ffb1..4720606 100644
+--- a/lib/IO/Socket/SSL.pm
++++ b/lib/IO/Socket/SSL.pm
+@@ -61,6 +61,15 @@ BEGIN{
+ 	if $@;
+ }
+ 
++# get constants for SSL_OP_NO_* now, instead calling the releated functions
++# everytime we setup a connection
++my %SSL_OP_NO;
++for(qw( SSLv2 SSLv3 TLSv1 TLSv1_1 TLSv11:TLSv1_1 TLSv1_2 TLSv12:TLSv1_2 )) {
++    my ($k,$op) = m{:} ? split(m{:},$_,2) : ($_,$_);
++    my $sub = "Net::SSLeay::OP_NO_$op";
++    $SSL_OP_NO{$k} = eval { no strict 'refs'; &$sub } || 0;
++}
++
+ our $DEBUG;
+ use vars qw(@ISA $SSL_ERROR @EXPORT );
+ 
+@@ -1582,32 +1591,27 @@ sub new {
+     my $ver='';
+     my $disable_ver = 0;
+     for (split(/\s*:\s*/,$arg_hash->{SSL_version})) {
+-	m{^(!?)(?:(SSL(?:v2|v3|v23|v2/3))|(TLSv1[12]?))$}i 
++	m{^(!?)(?:(SSL(?:v2|v3|v23|v2/3))|(TLSv1(?:_?[12])?))$}i
+ 	or croak("invalid SSL_version specified");
+ 	my $not = $1;
+ 	( my $v = lc($2||$3) ) =~s{^(...)}{\U$1};
+-	$v =~s{/}{}; # interpret SSLv2/3 as SSLv23
+ 	if ( $not ) {
+-	    $disable_ver |= 
+-		$v eq 'SSLv2'  ? 0x01000000 : # SSL_OP_NO_SSLv2 
+-		$v eq 'SSLv3'  ? 0x02000000 : # SSL_OP_NO_SSLv3 
+-		$v eq 'TLSv1'  ? 0x04000000 : # SSL_OP_NO_TLSv1
+-		$v eq 'TLSv11' ? 0x00000400 : # SSL_OP_NO_TLSv1_1
+-		$v eq 'TLSv12' ? 0x08000000 : # SSL_OP_NO_TLSv1_2
+-		croak("cannot disable version $_");
++	    $disable_ver |= $SSL_OP_NO{$v};
+ 	} else {
+ 	    croak("cannot set multiple SSL protocols in SSL_version")
+ 		if $ver && $v ne $ver;
+ 	    $ver = $v;
++	    $ver =~s{/}{}; # interpret SSLv2/3 as SSLv23
++	    $ver =~s{(TLSv1)(\d)}{$1\_$2}; # TLSv1_1
+ 	}
+     }
+ 
+     my $ctx_new_sub =  UNIVERSAL::can( 'Net::SSLeay',
+-	$ver eq 'SSLv2'  ? 'CTX_v2_new' :
+-	$ver eq 'SSLv3'  ? 'CTX_v3_new' :
+-	$ver eq 'TLSv1'  ? 'CTX_tlsv1_new' :
+-	$ver eq 'TLSv11' ? 'CTX_tlsv1_1_new' :
+-	$ver eq 'TLSv12' ? 'CTX_tlsv1_2_new' :
++	$ver eq 'SSLv2'   ? 'CTX_v2_new' :
++	$ver eq 'SSLv3'   ? 'CTX_v3_new' :
++	$ver eq 'TLSv1'   ? 'CTX_tlsv1_new' :
++	$ver eq 'TLSv1_1' ? 'CTX_tlsv1_1_new' :
++	$ver eq 'TLSv1_2' ? 'CTX_tlsv1_2_new' :
+ 	'CTX_new'
+     ) or return IO::Socket::SSL->error("SSL Version $ver not supported");
+     my $ctx = $ctx_new_sub->() or return 
+@@ -2064,24 +2068,26 @@ See section "SNI Support" for details of SNI the support.
+ 
+ =item SSL_version
+ 
+-Sets the version of the SSL protocol used to transmit data. 'SSLv23' auto-negotiates 
+-between SSLv2 and SSLv3, while 'SSLv2', 'SSLv3', 'TLSv1', 'TLSv11' or 'TLSv12'
+-restrict the protocol to the specified version. All values are case-insensitive.
+-Support for 'TLSv11' and 'TLSv12' requires recent versions of Net::SSLeay
+-and openssl.
++Sets the version of the SSL protocol used to transmit data. 
++'SSLv23' auto-negotiates between SSLv2 and SSLv3, while 'SSLv2', 'SSLv3',
++'TLSv1', 'TLSv1_1' or 'TLSv1_2' restrict the protocol to the specified version.
++All values are case-insensitive.  Instead of 'TLSv1_1' and 'TLSv1_2' one can
++also use 'TLSv11' and 'TLSv12'.  Support for 'TLSv1_1' and 'TLSv1_2' requires
++recent versions of Net::SSLeay and openssl.
+ 
+ You can limit to set of supported protocols by adding !version separated by ':'.
+ 
+ The default SSL_version is defined by underlying cryptographic library.
+-E.g. 'SSLv23:!SSLv2' means, that SSLv2, SSLv3 and TLSv1
+-are supported for initial protocol handshakes, but SSLv2 will not be accepted, leaving 
+-only SSLv3 and TLSv1. You can also use !TLSv11 and !TLSv12 to disable TLS versions
+-1.1 and 1.2 while allowing TLS version 1.0.
+-
+-Setting the version instead to 'TLSv1' will probably break interaction with lots of
+-clients which start with SSLv2 and then upgrade to TLSv1. On the other side some
+-clients just close the connection when they receive a TLS version 1.1 request. In this 
+-case setting the version to 'SSLv23:!SSLv2:!TLSv11:!TLSv12' might help.
++E.g. 'SSLv23:!SSLv2' means, that SSLv2, SSLv3 and
++TLSv1 are supported for initial protocol handshakes, but SSLv2 will not be
++accepted, leaving only SSLv3 and TLSv1. You can also use !TLSv1_1 and !TLSv1_2
++to disable TLS versions 1.1 and 1.2 while allowing TLS version 1.0.
++
++Setting the version instead to 'TLSv1' will probably break interaction with
++lots of clients which start with SSLv2 and then upgrade to TLSv1. On the other
++side some clients just close the connection when they receive a TLS version 1.1
++request. In this case setting the version to 'SSLv23:!SSLv2:!TLSv1_1:!TLSv1_2'
++might help.
+ 
+ =item SSL_cipher_list
+ 
+-- 
+2.7.4
+

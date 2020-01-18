@@ -1,6 +1,6 @@
 Name:           perl-IO-Socket-SSL
 Version:        1.94
-Release:        5%{?dist}
+Release:        6%{?dist}
 Summary:        Perl library for transparent SSL
 Group:          Development/Libraries
 License:        GPL+ or Artistic
@@ -14,6 +14,12 @@ Patch1:         IO-Socket-SSL-1.94-Respect-OpenSSL-default-ciphers-and-protocol-
 Patch2:         IO-Socket-SSL-1.94-Fix-typo-key-free.patch
 # Add support for ECDH key exchange, in upstream 1.955, bug #1316377
 Patch3:         IO-Socket-SSL-1.94-Added-support-for-ECDH-key-exchange-with-key-SSL_ecd.patch
+# Add support for handshake protocol TLSv11, TLSv12, bug #1335035,
+# in upstream 1.955
+Patch4:         IO-Socket-SSL-1.94-support-for-handshake-protocol-TLSv11-TLSv12.patch
+# The new syntax for the protocols is TLSv1_1 instead of TLSv11, bug #1335035,
+# in upstream 1.966
+Patch5:         IO-Socket-SSL-1.94-The-new-syntax-for-the-protocols-is-TLSv1_1-instead-.patch
 BuildArch:      noarch
 BuildRequires:  openssl >= 0.9.8
 BuildRequires:  perl
@@ -41,6 +47,7 @@ Requires:       perl(:MODULE_COMPAT_%(eval "`perl -V:version`"; echo $version))
 Requires:       perl(IO::Socket::IP) >= 0.20
 Requires:       perl(Socket) >= 1.95
 Requires:       perl(Net::LibIDN)
+Requires:       perl-Net-SSLeay >= 1.55-5
 Requires:       openssl >= 0.9.8
 
 %description
@@ -58,6 +65,8 @@ mod_perl.
 %patch1 -p1
 %patch2 -p1
 %patch3 -p1
+%patch4 -p1
+%patch5 -p1
 
 %build
 perl Makefile.PL INSTALLDIRS=vendor
@@ -79,6 +88,9 @@ make test
 %{_mandir}/man3/IO::Socket::SSL::Utils.3*
 
 %changelog
+* Thu Oct 06 2016 Petr Pisar <ppisar@redhat.com> - 1.94-6
+- Add support for TLSv1.1, TLSv1.2 (bug #1335035)
+
 * Thu Mar 10 2016 Jitka Plesnikova <jplesnik@redhat.com> - 1.94-5
 - Add support for ECDH key exchange (bug #1316377)
 
